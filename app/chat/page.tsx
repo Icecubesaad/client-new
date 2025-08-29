@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
@@ -69,7 +69,7 @@ const ChatPage = () => {
       return;
     }
     fetchChats();
-  }, [user]);
+  }, [user, router]);
 
   useEffect(() => {
     scrollToBottom();
@@ -232,7 +232,7 @@ const ChatPage = () => {
     <div className="flex h-screen bg-dark-gradient overflow-hidden">
       {/* Sidebar */}
       <AnimatePresence>
-        {(sidebarOpen || window?.innerWidth >= 768) && (
+        {(sidebarOpen || (typeof window !== 'undefined' && window?.innerWidth >= 768)) && (
           <motion.div
             initial={{ x: -280 }}
             animate={{ x: 0 }}

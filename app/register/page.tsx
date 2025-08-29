@@ -2,25 +2,34 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useRouter } from 'next/router';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
-import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
 
-const Login = () => {
+const Register = () => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
-  const { login } = useAuth();
+  const { register } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (password !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
     setIsLoading(true);
     
-    const success = await login(email, password);
+    const success = await register(name, email, password);
     if (success) {
       router.push('/chat');
     }
@@ -54,10 +63,10 @@ const Login = () => {
             <span className="text-white text-2xl font-bold">A</span>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">AI GPT</h1>
-          <p className="text-gray-400">Welcome back! Please sign in to continue.</p>
+          <p className="text-gray-400">Create your account to get started.</p>
         </motion.div>
 
-        {/* Login Form */}
+        {/* Register Form */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -65,6 +74,24 @@ const Login = () => {
           className="bg-card-gradient backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl"
         >
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Name Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Full Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  placeholder="Enter your full name"
+                  required
+                />
+              </div>
+            </div>
+
             {/* Email Field */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -95,7 +122,7 @@ const Login = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-12 pr-12 py-3 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                  placeholder="Enter your password"
+                  placeholder="Create a password"
                   required
                 />
                 <button
@@ -108,7 +135,32 @@ const Login = () => {
               </div>
             </div>
 
-            {/* Login Button */}
+            {/* Confirm Password Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Confirm Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full pl-12 pr-12 py-3 bg-black/20 border border-white/10 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  placeholder="Confirm your password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-300 transition-colors"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Register Button */}
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -120,22 +172,22 @@ const Login = () => {
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
               ) : (
                 <>
-                  <span>Sign In</span>
+                  <span>Create Account</span>
                   <ArrowRight className="w-5 h-5" />
                 </>
               )}
             </motion.button>
           </form>
 
-          {/* Register Link */}
+          {/* Login Link */}
           <div className="mt-6 text-center">
             <p className="text-gray-400">
-              Don't have an account?{' '}
+              Already have an account?{' '}
               <Link 
-                href="/register" 
+                href="/login" 
                 className="text-purple-400 hover:text-purple-300 font-medium transition-colors"
               >
-                Sign up here
+                Sign in here
               </Link>
             </p>
           </div>
@@ -145,4 +197,4 @@ const Login = () => {
   );
 };
 
-export default Login;
+export default Register;
