@@ -1,3 +1,5 @@
+// @ts-check
+ 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -5,5 +7,5 @@ const nextConfig = {
     BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:5000',
   },
 }
-
+ 
 module.exports = nextConfig
