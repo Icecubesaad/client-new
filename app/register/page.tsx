@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
-
+import toast from 'react-hot-toast';
 const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
