@@ -9,28 +9,18 @@ const ChatRedirectPage = () => {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   
-  const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://server-test-flufbkg33-icecubesaads-projects.vercel.app/';
 
-  useEffect(() => {
-    const createAndRedirectToNewChat = async () => {
+    useEffect(() => {
+    const redirectToNewChat = () => {
       if (!user || authLoading) return;
       
-      try {
-        // Create a new chat
-      const response = await axios.post(`${API_BASE_URL}/api/chats`);
-      const newChat = response.data;
-        
-        // Redirect to the new chat
-        router.replace(`/chat/${newChat._id}`);
-    } catch (error) {
-        console.error('Error creating new chat:', error);
-        // If chat creation fails, still redirect but let the dynamic page handle it
-        router.replace('/chat/new');
-      }
+      // Simply redirect to the new chat page without creating database entry
+      router.replace('/chat/new');
     };
 
-    createAndRedirectToNewChat();
-  }, [user, authLoading, router, API_BASE_URL]);
+    redirectToNewChat();
+  }, [user, authLoading, router]);
 
   // Show loading while redirecting
   if (authLoading || !user) {

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../../context/AuthContext';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
@@ -66,25 +66,14 @@ interface Chat {
   updatedAt: Date;
 }
 
-interface Recommendation {
-  name: string;
-  address: string;
-  rating?: number;
-  distance?: string;
-  offer?: string;
-}
-
-const ChatPage = () => {
+const NewChatPage = () => {
   const { user: authUser, logout, loading: authLoading } = useAuth();
   const router = useRouter();
-  const params = useParams();
-  const chatId = params.chatId as string;
   
   const user = authUser;
   
   const [mounted, setMounted] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
-  const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -94,7 +83,6 @@ const ChatPage = () => {
   const [locationEnabled, setLocationEnabled] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
-  const [chatLoading, setChatLoading] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -107,17 +95,14 @@ const ChatPage = () => {
     if (user) {
       loadChats();
       loadUserLocation();
-      if (chatId) {
-        loadCurrentChat(chatId);
-      }
     }
-  }, [user, chatId]);
+  }, [user]);
 
   useEffect(() => {
     if (mounted) {
       scrollToBottom();
     }
-  }, [currentChat?.messages, mounted]);
+  }, [mounted]);
 
   useEffect(() => {
     if (editingChatId && editInputRef.current) {
@@ -133,36 +118,6 @@ const ChatPage = () => {
     } catch (error) {
       console.error('Error loading chats:', error);
       toast.error('Failed to load chats');
-    }
-  };
-
-  const loadCurrentChat = async (chatId: string) => {
-    setChatLoading(true);
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/chats/${chatId}`);
-      setCurrentChat(response.data);
-      
-      // Update the chats list with the loaded chat
-      setChats(prev => {
-        const existingIndex = prev.findIndex(chat => chat._id === chatId);
-        if (existingIndex >= 0) {
-          const newChats = [...prev];
-          newChats[existingIndex] = response.data;
-          return newChats;
-        } else {
-          return [response.data, ...prev];
-        }
-      });
-    } catch (error: any) {
-      console.error('Error loading chat:', error);
-      if (error.response?.status === 404) {
-        toast.error('Chat not found');
-        router.push('/chat');
-      } else {
-        toast.error('Failed to load chat');
-      }
-    } finally {
-      setChatLoading(false);
     }
   };
 
@@ -275,7 +230,13 @@ const ChatPage = () => {
   };
 
   const createNewChat = () => {
-    // Navigate to new chat page without creating database entry
+    // If already on new chat page, just focus the input
+    if (window.location.pathname === '/chat/new') {
+      inputRef.current?.focus();
+      return;
+    }
+    
+    // Navigate to new chat page
     router.push('/chat/new');
     setSidebarOpen(false);
   };
@@ -331,10 +292,6 @@ const ChatPage = () => {
           : chat
       ));
       
-      if (currentChat && currentChat._id === editingChatId) {
-        setCurrentChat(prev => prev ? { ...prev, title: editTitle.trim() } : null);
-      }
-      
       moveChatToTop(editingChatId);
       setEditingChatId(null);
       setEditTitle('');
@@ -374,12 +331,6 @@ const ChatPage = () => {
     try {
       await axios.delete(`${API_BASE_URL}/api/chats/${chatId}`);
       setChats(prev => prev.filter(chat => chat._id !== chatId));
-      
-      // If we're currently viewing the deleted chat, redirect to main chat page
-      if (chatId === chatId) {
-        router.push('/chat');
-      }
-      
       toast.success('Chat deleted successfully');
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -390,36 +341,39 @@ const ChatPage = () => {
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!message.trim() || isLoading || !currentChat) return;
+    if (!message.trim() || isLoading) return;
 
     const userMessage = message.trim();
     setMessage('');
     setIsLoading(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/chats/${chatId}/messages`, {
+      // First create the chat since this is the first message
+      const chatResponse = await axios.post(`${API_BASE_URL}/api/chats`);
+      const newChat = chatResponse.data;
+      
+      // Then send the message to the newly created chat
+      const messageResponse = await axios.post(`${API_BASE_URL}/api/chats/${newChat._id}/messages`, {
         message: userMessage,
         location: currentLocation
       });
 
-      // Update current chat with new messages
+      // Update the chats list with the new chat
       const updatedChat = {
-        ...currentChat,
-        messages: [...(currentChat.messages || []), response.data.userMessage, response.data.assistantMessage],
-        title: (!currentChat.messages || currentChat.messages.length === 0) ? (userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '')) : currentChat.title,
+        ...newChat,
+        messages: [messageResponse.data.userMessage, messageResponse.data.assistantMessage],
+        title: userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : ''),
         updatedAt: new Date()
       };
       
-      setCurrentChat(updatedChat);
+      setChats(prev => [updatedChat, ...prev]);
       
-      // Update chats list
-      setChats(prev => prev.map(chat => 
-        chat._id === chatId ? updatedChat : chat
-      ));
-
-      moveChatToTop(chatId);
+      // Redirect to the new chat page
+      router.push(`/chat/${newChat._id}`);
+      
+      toast.success('Chat created and message sent');
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error creating chat and sending message:', error);
       toast.error('Failed to send message');
     } finally {
       setIsLoading(false);
@@ -442,22 +396,6 @@ const ChatPage = () => {
 
   const navigateToSettings = () => {
     router.push('/settings');
-  };
-
-  const renderMessageContent = (content: string) => {
-    const parts = content.split(/(\*\*.*?\*\*)/g);
-    
-    return parts.map((part, index) => {
-      if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
-        const boldText = part.slice(2, -2);
-        return (
-          <span key={index} className="font-bold">
-            {boldText}
-          </span>
-        );
-      }
-      return part;
-    });
   };
 
   const renderPlaceRecommendations = (placesData: PlaceData[]) => {
@@ -520,7 +458,7 @@ const ChatPage = () => {
   };
 
   // Show loading while authentication is being checked
-  if (!mounted || authLoading || chatLoading) {
+  if (!mounted || authLoading) {
     return (
       <div className="flex h-screen bg-gray-50 items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -593,108 +531,94 @@ const ChatPage = () => {
                 
                 <div className="space-y-2">
                   <AnimatePresence mode="wait" initial={false}>
-                    {filteredChats.map((chat, index) => {
-                      const isSelected = chatId === chat._id;
-                      
-                      return (
-                        <motion.div
-                          key={chat._id}
-                          layout
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: -20 }}
-                          transition={{ 
-                            duration: 0.2,
-                            ease: "easeOut",
-                            layout: { duration: 0.3 }
-                          }}
-                          onClick={() => selectChat(chat._id)}
-                          className={`p-3 rounded-xl cursor-pointer transition-all duration-200 group flex items-start justify-between ${
-                            isSelected
-                              ? 'bg-blue-50 border border-blue-200 shadow-sm'
-                              : 'hover:bg-gray-50 border border-transparent'
-                          }`}
-                        >
-                          <div className="flex items-start space-x-3 flex-1 min-w-0">
-                            <MessageSquare className={`w-4 h-4 flex-shrink-0 mt-0.5 transition-colors duration-200 ${
-                              isSelected ? 'text-blue-500' : 'text-gray-400'
-                            }`} />
-                            <div className="flex-1 min-w-0">
-                              {editingChatId === chat._id ? (
-                                <input
-                                  ref={editInputRef}
-                                  type="text"
-                                  value={editTitle}
-                                  onChange={(e) => setEditTitle(e.target.value)}
-                                  onBlur={saveEditedTitle}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      saveEditedTitle();
-                                    }
-                                    if (e.key === 'Escape') {
-                                      e.preventDefault();
-                                      cancelEditing();
-                                    }
-                                  }}
-                                  className="w-full text-sm font-medium text-gray-800 bg-white border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                  autoFocus
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              ) : (
-                                <>
-                                  <p className={`text-sm leading-5 line-clamp-2 font-medium transition-colors duration-200 ${
-                                    isSelected ? 'text-blue-700' : 'text-gray-800'
-                                  }`}>
-                                    {chat.title}
-                                  </p>
-                                  <p className={`text-xs mt-1 transition-colors duration-200 ${
-                                    isSelected ? 'text-blue-500' : 'text-gray-500'
-                                  }`}>
-                                    {formatTime(chat.updatedAt)}
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-1">
+                    {filteredChats.map((chat, index) => (
+                      <motion.div
+                        key={chat._id}
+                        layout
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ 
+                          duration: 0.2,
+                          ease: "easeOut",
+                          layout: { duration: 0.3 }
+                        }}
+                        onClick={() => selectChat(chat._id)}
+                        className="p-3 rounded-xl cursor-pointer transition-all duration-200 group flex items-start justify-between hover:bg-gray-50 border border-transparent"
+                      >
+                        <div className="flex items-start space-x-3 flex-1 min-w-0">
+                          <MessageSquare className="w-4 h-4 flex-shrink-0 mt-0.5 transition-colors duration-200 text-gray-400" />
+                          <div className="flex-1 min-w-0">
                             {editingChatId === chat._id ? (
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  saveEditedTitle();
+                              <input
+                                ref={editInputRef}
+                                type="text"
+                                value={editTitle}
+                                onChange={(e) => setEditTitle(e.target.value)}
+                                onBlur={saveEditedTitle}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    saveEditedTitle();
+                                  }
+                                  if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    cancelEditing();
+                                  }
                                 }}
-                                className="text-green-500 hover:text-green-600 p-1 rounded-lg hover:bg-green-50 transition-all"
-                              >
-                                <Check className="w-4 h-4" />
-                              </motion.button>
+                                className="w-full text-sm font-medium text-gray-800 bg-white border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                autoFocus
+                                onClick={(e) => e.stopPropagation()}
+                              />
                             ) : (
-                              <motion.button
-                                whileHover={{ scale: 1.1 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  startEditingTitle(chat._id, chat.title);
-                                }}
-                                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 transition-all duration-200 p-1 rounded-lg hover:bg-blue-50"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </motion.button>
+                              <>
+                                <p className="text-sm leading-5 line-clamp-2 font-medium transition-colors duration-200 text-gray-800">
+                                  {chat.title}
+                                </p>
+                                <p className="text-xs mt-1 transition-colors duration-200 text-gray-500">
+                                  {formatTime(chat.updatedAt)}
+                                </p>
+                              </>
                             )}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          {editingChatId === chat._id ? (
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}
-                              onClick={(e) => deleteChat(chat._id, e)}
-                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all duration-200 p-1 rounded-lg hover:bg-red-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveEditedTitle();
+                              }}
+                              className="text-green-500 hover:text-green-600 p-1 rounded-lg hover:bg-green-50 transition-all"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Check className="w-4 h-4" />
                             </motion.button>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                          ) : (
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditingTitle(chat._id, chat.title);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 transition-all duration-200 p-1 rounded-lg hover:bg-blue-50"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </motion.button>
+                          )}
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => deleteChat(chat._id, e)}
+                            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all duration-200 p-1 rounded-lg hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    ))}
                   </AnimatePresence>
                 </div>
 
@@ -760,14 +684,10 @@ const ChatPage = () => {
               <Menu className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-lg font-bold text-gray-800">
-                {currentChat?.title || 'CHAT A.I+'}
-              </h1>
-              {currentChat && (
-                <p className="text-sm text-gray-500">
-                  {currentChat?.messages?.length || 0} messages • Local Business Assistant
-                </p>
-              )}
+              <h1 className="text-lg font-bold text-gray-800">New Chat</h1>
+              <p className="text-sm text-gray-500">
+                Start a conversation • Local Business Assistant
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -788,168 +708,68 @@ const ChatPage = () => {
           </div>
         </div>
 
-        {/* Messages Area */}
+        {/* Messages Area - Always show empty state for new chat */}
         <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white" style={{ scrollBehavior: 'smooth' }}>
-          {!currentChat || !currentChat.messages || currentChat.messages.length === 0 ? (
-            <div className="h-full flex items-center justify-center p-6">
-              <div className="text-center max-w-lg">
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  className="mb-8"
-                >
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
-                    <Bot className="w-10 h-10 text-white" />
-                  </div>
-                  <h2 className="text-3xl font-bold text-gray-800 mb-4">Find Local Businesses & Services</h2>
-                  <p className="text-gray-600 text-lg leading-relaxed mb-6">
-                    I help you discover restaurants, shops, and services near you with detailed information, reviews, and contact details!
-                  </p>
-                  
-                  {!locationEnabled && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-                      <div className="flex items-center space-x-2 text-amber-800 mb-2">
-                        <AlertCircle className="w-5 h-5" />
-                        <span className="font-medium">Location Required</span>
-                      </div>
-                      <p className="text-amber-700 text-sm">
-                        Enable location sharing to get personalized recommendations for businesses near you.
-                      </p>
+          <div className="h-full flex items-center justify-center p-6">
+            <div className="text-center max-w-lg">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="mb-8"
+              >
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                  <Bot className="w-10 h-10 text-white" />
+                </div>
+                <h2 className="text-3xl font-bold text-gray-800 mb-4">Find Local Businesses & Services</h2>
+                <p className="text-gray-600 text-lg leading-relaxed mb-6">
+                  I help you discover restaurants, shops, and services near you with detailed information, reviews, and contact details!
+                </p>
+                
+                {!locationEnabled && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+                    <div className="flex items-center space-x-2 text-amber-800 mb-2">
+                      <AlertCircle className="w-5 h-5" />
+                      <span className="font-medium">Location Required</span>
                     </div>
-                  )}
-                </motion.div>
+                    <p className="text-amber-700 text-sm">
+                      Enable location sharing to get personalized recommendations for businesses near you.
+                    </p>
+                  </div>
+                )}
+              </motion.div>
 
-                {/* Suggestion Cards */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3, duration: 0.6 }}
-                  className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8"
-                >
-                  {[
-                    { text: "Find pizza places nearby", query: "Best pizza places near me with menu and prices" },
-                    { text: "Local bakeries", query: "List all bakeries near me with their specialties" },
-                    { text: "Clothing stores", query: "Find clothing stores near me" },
-                    { text: "Electronics shops", query: "Electronics stores near me with phone numbers" }
-                  ].map((suggestion, index) => (
-                    <motion.button
-                      key={suggestion.text}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5 + index * 0.1 }}
-                      onClick={() => setMessage(suggestion.query)}
-                      className="p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-lg transition-all text-left group"
-                    >
-                      <p className="text-sm font-medium text-gray-800 group-hover:text-blue-600 transition-colors">
-                        {suggestion.text}
-                      </p>
-                    </motion.button>
-                  ))}
-                </motion.div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-6 space-y-6 max-w-4xl mx-auto">
-              <AnimatePresence mode="wait" initial={false}>
-                {currentChat.messages?.map((msg, index) => (
-                  <motion.div
-                    key={`${currentChat._id}-${index}`}
-                    layout
-                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    transition={{ 
-                      duration: 0.3,
-                      ease: "easeOut",
-                      layout: { duration: 0.2 }
-                    }}
-                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              {/* Suggestion Cards */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3, duration: 0.6 }}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8"
+              >
+                {[
+                  { text: "Find pizza places nearby", query: "Best pizza places near me with menu and prices" },
+                  { text: "Local bakeries", query: "List all bakeries near me with their specialties" },
+                  { text: "Clothing stores", query: "Find clothing stores near me" },
+                  { text: "Electronics shops", query: "Electronics stores near me with phone numbers" }
+                ].map((suggestion, index) => (
+                  <motion.button
+                    key={suggestion.text}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.5 + index * 0.1 }}
+                    onClick={() => setMessage(suggestion.query)}
+                    className="p-4 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:shadow-lg transition-all text-left group"
                   >
-                    <div className={`flex max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <motion.div 
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ delay: 0.1 }}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg ${
-                          msg.role === 'user' 
-                            ? 'bg-gradient-to-br from-blue-500 to-blue-600 ml-3' 
-                            : 'bg-gradient-to-br from-gray-200 to-gray-300 mr-3'
-                        }`}
-                      >
-                        {msg.role === 'user' ? (
-                          <span className="text-white font-bold text-sm">
-                            {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                          </span>
-                        ) : (
-                          <Bot className="w-5 h-5 text-gray-600" />
-                        )}
-                      </motion.div>
-                      <motion.div 
-                        whileHover={{ scale: 1.02 }}
-                        className={`rounded-2xl p-4 shadow-md transition-all ${
-                          msg.role === 'user'
-                            ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white'
-                            : 'bg-white border border-gray-200 text-gray-800'
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap leading-relaxed text-sm">{renderMessageContent(msg.content)}</p>
-                        
-                        {/* Render place recommendations for assistant messages */}
-                        {msg.role === 'assistant' && msg.placesData && (
-                          <div className="mt-4">
-                            {renderPlaceRecommendations(msg.placesData)}
-                          </div>
-                        )}
-                        
-                        <p className={`text-xs mt-3 ${
-                          msg.role === 'user' ? 'text-blue-100' : 'text-gray-500'
-                        }`}>
-                          {formatTime(msg.timestamp)}
-                        </p>
-                      </motion.div>
-                    </div>
-                  </motion.div>
+                    <p className="text-sm font-medium text-gray-800 group-hover:text-blue-600 transition-colors">
+                      {suggestion.text}
+                    </p>
+                  </motion.button>
                 ))}
-              </AnimatePresence>
-
-              {isLoading && (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-start"
-                >
-                  <div className="flex">
-                    <div className="w-10 h-10 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center mr-3 flex-shrink-0 shadow-lg">
-                      <Bot className="w-5 h-5 text-gray-600" />
-                    </div>
-                    <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-md">
-                      <div className="flex space-x-1">
-                        <motion.div 
-                          animate={{ y: [0, -8, 0] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0 }}
-                          className="w-2 h-2 bg-blue-500 rounded-full"
-                        />
-                        <motion.div 
-                          animate={{ y: [0, -8, 0] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0.2 }}
-                          className="w-2 h-2 bg-blue-500 rounded-full"
-                        />
-                        <motion.div 
-                          animate={{ y: [0, -8, 0] }}
-                          transition={{ duration: 1, repeat: Infinity, delay: 0.4 }}
-                          className="w-2 h-2 bg-blue-500 rounded-full"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              <div ref={messagesEndRef} />
+              </motion.div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Input Area */}
@@ -1051,4 +871,4 @@ const ChatPage = () => {
   );
 };
 
-export default ChatPage;
+export default NewChatPage;
