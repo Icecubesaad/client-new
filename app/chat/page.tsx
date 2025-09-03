@@ -9,7 +9,7 @@ const ChatRedirectPage = () => {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   
-  const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://server-test-flufbkg33-icecubesaads-projects.vercel.app/';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://server-test-flufbkg33-icecubesaads-projects.vercel.app';
 
     useEffect(() => {
     const redirectToNewChat = () => {
