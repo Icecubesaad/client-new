@@ -10,6 +10,12 @@ interface User {
   name: string;
   email: string;
   preferredLanguage: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
+    lastUpdated: Date;
+  };
 }
 
 interface AuthContextType {
@@ -39,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const token = Cookies.get('token');
+    
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
@@ -55,6 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error fetching user:', error);
       Cookies.remove('token');
       delete axios.defaults.headers.common['Authorization'];
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -69,7 +77,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const { token, user: userData } = response.data;
       
-      Cookies.set('token', token, { expires: 7 });
+      Cookies.set('token', token, { 
+        expires: 7,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+      });
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(userData);
       
@@ -92,7 +104,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const { token, user: userData } = response.data;
       
-      Cookies.set('token', token, { expires: 7 });
+      Cookies.set('token', token, { 
+        expires: 7,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+      });
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(userData);
       
