@@ -88,7 +88,7 @@ const NewChatPage = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://server-test-flufbkg33-icecubesaads-projects.vercel.app';
+  const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://server-test-steel.vercel.app';
 
   useEffect(() => {
     setMounted(true);
