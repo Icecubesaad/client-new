@@ -33,6 +33,7 @@ import {
 interface Location {
   latitude: number;
   longitude: number;
+  accuracy?: number;
   address?: string;
 }
 
@@ -353,9 +354,15 @@ const NewChatPage = () => {
       const newChat = chatResponse.data;
       
       // Then send the message to the newly created chat
+      const locationData = currentLocation ? {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        accuracy: currentLocation.accuracy
+      } : null;
+      
       const messageResponse = await axios.post(`${API_BASE_URL}/api/chats/${newChat._id}/messages`, {
         message: userMessage,
-        location: currentLocation
+        location: locationData
       });
 
       // Update the chats list with the new chat
@@ -368,8 +375,8 @@ const NewChatPage = () => {
       
       setChats(prev => [updatedChat, ...prev]);
       
-      // Redirect to the new chat page
-      router.push(`/chat/${newChat._id}`);
+      // Redirect to the new chat page using replace for seamless experience
+      router.replace(`/chat/${newChat._id}`);
       
       toast.success('Chat created and message sent');
     } catch (error) {
@@ -772,86 +779,72 @@ const NewChatPage = () => {
           </div>
         </div>
 
-        {/* Input Area */}
-        <div className="bg-white border-t border-gray-200 p-4 shadow-lg">
-          <form onSubmit={sendMessage} className="max-w-4xl mx-auto">
-            <div className="relative">
+        {/* Input Area - Matching chat/[id] design */}
+        <div className="bg-white border-t border-gray-200 p-6">
+          <div className="max-w-4xl mx-auto">
+            <form onSubmit={sendMessage} className="flex items-center space-x-2">
+              {/* Location Toggle Button */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                type="button"
+                onClick={locationEnabled ? clearLocation : requestLocation}
+                disabled={locationLoading}
+                className={`p-3 rounded-xl transition-all shadow-lg ${
+                  locationEnabled
+                    ? 'bg-green-500 text-white hover:bg-green-600'
+                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                } ${locationLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={locationEnabled ? 'Location enabled - Click to disable' : 'Click to enable location for better recommendations'}
+              >
+                {locationLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
+                ) : (
+                  <MapPin className={`w-5 h-5 ${locationLoading ? 'animate-pulse' : ''}`} />
+                )}
+              </motion.button>
+
               <input
                 ref={inputRef}
                 type="text"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Ask me about local businesses, restaurants, shops..."
-                className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 pr-28 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+                placeholder={
+                  isLoading
+                    ? "Sending..."
+                    : locationEnabled
+                    ? "Ask about places near you..."
+                    : "Type your message..."
+                }
                 disabled={isLoading}
+                className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               />
               
-              {/* Location Toggle */}
-              <div className="absolute right-16 top-1/2 transform -translate-y-1/2 flex items-center space-x-2">
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={requestLocation}
-                  disabled={locationLoading}
-                  className={`p-2 rounded-xl transition-all duration-200 ${
-                    locationEnabled 
-                      ? 'bg-green-100 text-green-600 hover:bg-green-200' 
-                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                  } ${locationLoading ? 'animate-pulse' : ''}`}
-                  title={locationEnabled ? 'Location enabled' : 'Click to enable location'}
-                >
-                  {locationLoading ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                  ) : (
-                    <Navigation className={`w-4 h-4 ${locationEnabled ? 'text-green-600' : 'text-gray-500'}`} />
-                  )}
-                </motion.button>
-              </div>
-              
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 type="submit"
                 disabled={!message.trim() || isLoading}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl flex items-center justify-center hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
               >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
+                {isLoading ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </motion.button>
+            </form>
             
-            {/* Quick Actions */}
-            <div className="flex items-center space-x-3 mt-4">
-              <span className="text-xs text-gray-500">Try asking:</span>
-              {[
-                "Pizza near me with menu",
-                "Bakeries with prices",
-                "Clothing stores nearby",
-                "Electronics shops"
-              ].map((action) => (
-                <motion.button
-                  key={action}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setMessage(action)}
-                  className="text-xs bg-gray-100 hover:bg-blue-100 text-gray-600 hover:text-blue-600 px-3 py-1.5 rounded-lg transition-all"
-                >
-                  {action}
-                </motion.button>
-              ))}
-            </div>
-
-            {/* Location Permission Notice */}
-            {!locationEnabled && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-3 text-center"
-              >
-                <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                  💡 Enable location for personalized local business recommendations
-                </p>
-              </motion.div>
+            {/* Location status indicator */}
+            {locationEnabled && currentLocation && (
+              <div className="flex items-center justify-center mt-3">
+                <span className="flex items-center space-x-1 text-sm text-green-600">
+                  <MapPin className="w-3 h-3" />
+                  <span>Location enabled</span>
+                </span>
+              </div>
             )}
-          </form>
+          </div>
         </div>
       </div>
 
