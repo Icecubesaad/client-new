@@ -4,7 +4,7 @@
 const nextConfig = {
   reactStrictMode: true,
   env: {
-    BACKEND_URL: process.env.BACKEND_URL || 'https://server-test-steel.vercel.app',
+    BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL ||'http://localhost:5001'
   },
 }
  
