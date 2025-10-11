@@ -46,6 +46,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const token = Cookies.get('token');
     
+    console.log('🔧 AuthContext Debug:', {
+      hasToken: !!token,
+      apiBaseUrl: API_BASE_URL,
+      currentUrl: typeof window !== 'undefined' ? window.location.href : 'SSR',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'SSR'
+    });
+    
+    if (!API_BASE_URL) {
+      const error = 'NEXT_PUBLIC_BACKEND_URL is not defined!';
+      console.error('❌ Backend URL Error:', error);
+      toast.error(`Config Error: ${error}`);
+      setLoading(false);
+      return;
+    }
+    
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       fetchUser();
@@ -70,11 +85,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      console.log('🔐 Attempting login to:', `${API_BASE_URL}/api/auth/login`);
+      
       const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         email,
         password,
       });
 
+      console.log('✅ Login successful:', response.status);
       const { token, user: userData } = response.data;
       
       Cookies.set('token', token, { 
@@ -88,8 +106,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success('Login successful!');
       return true;
     } catch (error: any) {
-      const message = error.response?.data?.error || 'Login failed';
-      toast.error(message);
+      console.error('❌ Login failed:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        code: error.code,
+        url: `${API_BASE_URL}/api/auth/login`
+      });
+      
+      const message = error.response?.data?.error || error.message || 'Login failed';
+      toast.error(`Login Error: ${message}`);
       return false;
     }
   };

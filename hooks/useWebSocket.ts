@@ -48,9 +48,30 @@ export const useWebSocket = ({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const reconnectAttemptsRef = useRef(0);
 
-  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
-
   const connect = useCallback(() => {
+    if (socketRef.current?.connected) {
+      console.log('WebSocket already connected');
+      return;
+    }
+
+    const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+    
+    console.log('🔧 WebSocket Connection Debug:', {
+      backendUrl: API_BASE_URL,
+      currentUrl: typeof window !== 'undefined' ? window.location.href : 'SSR',
+      protocol: typeof window !== 'undefined' ? window.location.protocol : 'SSR',
+      timestamp: new Date().toISOString()
+    });
+    
+    if (!API_BASE_URL) {
+      const error = 'Backend URL not configured for WebSocket';
+      console.error('❌ WebSocket Config Error:', error);
+      toast.error(`WebSocket Error: ${error}`);
+      return;
+    }
+
+    console.log('Connecting to WebSocket at:', API_BASE_URL);
+
     const token = Cookies.get('token');
     
     if (!token) {
@@ -82,7 +103,8 @@ export const useWebSocket = ({
 
     // Connection event handlers
     socket.on('connect', () => {
-      console.log('WebSocket connected');
+      console.log('✅ WebSocket connected successfully');
+      toast.success('Connected to chat service');
       setIsConnected(true);
       setIsReconnecting(false);
       reconnectAttemptsRef.current = 0;
@@ -94,7 +116,8 @@ export const useWebSocket = ({
     });
 
     socket.on('disconnect', (reason) => {
-      console.log('WebSocket disconnected:', reason);
+      console.error('❌ WebSocket disconnected:', reason);
+      toast.error(`Connection lost: ${reason}`);
       setIsConnected(false);
       
       // Handle reconnection for unexpected disconnects
@@ -106,15 +129,21 @@ export const useWebSocket = ({
     });
 
     socket.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error);
+      console.error('❌ WebSocket connection error:', error);
+      toast.error(`Connection failed: ${error.message || 'Network error'}`);
       setIsConnected(false);
+      setIsReconnecting(true);
       
-      if (error.message === 'Authentication error') {
-        toast.error('Authentication failed. Please login again.');
-        // Don't attempt reconnect for auth errors
-      } else {
-        setIsReconnecting(true);
+      reconnectAttemptsRef.current++;
+      
+      if (reconnectAttemptsRef.current <= 5) {
+        console.log(`🔄 Reconnection attempt ${reconnectAttemptsRef.current}/5`);
+        toast.loading(`Reconnecting... (${reconnectAttemptsRef.current}/5)`);
         attemptReconnect();
+      } else {
+        console.error('❌ Max reconnection attempts reached');
+        toast.error('Unable to connect to server. Please check your connection.');
+        setIsReconnecting(false);
       }
     });
 
