@@ -4,11 +4,12 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../../context/AuthContext';
 import { useRouter, useParams } from 'next/navigation';
-import { useWebSocket } from '../../../hooks/useWebSocket';
+import { ConnectionStatus } from '../../../components/ConnectionStatus';
 import { useLocation } from '../../../hooks/useLocation';
+import { useWebSocket } from '../../../hooks/useWebSocket';
+import LocationDebug from '../../../components/LocationDebug';
 import { StreamingMessage } from '../../../components/StreamingMessage';
 import { TypingIndicator } from '../../../components/TypingIndicator';
-import { ConnectionStatus } from '../../../components/ConnectionStatus';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
@@ -51,7 +52,8 @@ const StreamingChatPage = () => {
   const { user, logout, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
-  const chatId = params.chatId as string;
+  // Handle both /chat/new and /chat/[chatId] routes
+  const chatId = (params.chatId as string) || 'new';
 
   // State management
   const [mounted, setMounted] = useState(false);
@@ -64,6 +66,7 @@ const StreamingChatPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
+  const [activeChatId, setActiveChatId] = useState<string>(chatId); // Track actual active chat ID
   // Location hook
   const {
     location: currentLocation,
@@ -72,9 +75,10 @@ const StreamingChatPage = () => {
     isSupported: locationSupported,
     requestLocation,
     clearLocation,
-    getCurrentLocation
+    getCurrentLocation,
+    forceRefreshLocation
   } = useLocation();
-  const [chatLoading, setChatLoading] = useState(true);
+  const [chatLoading, setChatLoading] = useState(false); // Start with false for new chats
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -134,21 +138,53 @@ const StreamingChatPage = () => {
     onError: (error) => {
       setIsTyping(false);
       setStreamingMessageId(null);
+    },
+    onChatUpdate: (data) => {
+      console.log('📢 Received chat update:', data);
+      console.log('🔍 Current chat ID:', currentChat?._id);
+      console.log('🔍 Update chat ID:', data.chatId);
+      
+      // Update current chat if it matches
+      if (currentChat && currentChat._id === data.chatId) {
+        console.log('✅ Updating current chat title');
+        setCurrentChat(prev => prev ? { ...prev, title: data.title, updatedAt: new Date(data.updatedAt) } : null);
+      }
+      
+      // Update in chats list
+      setChats(prev => {
+        const updated = prev.map(chat => 
+          chat._id === data.chatId 
+            ? { ...chat, title: data.title, updatedAt: new Date(data.updatedAt) }
+            : chat
+        );
+        console.log('📋 Updated chats list');
+        return updated;
+      });
     }
   });
 
   // Initialize
   useEffect(() => {
+    console.log('🔧 Initializing StreamingChatPage with chatId:', chatId);
+    console.log('📍 Current route params:', params);
     setMounted(true);
     if (user) {
       loadChats();
       if (chatId && chatId !== 'new') {
+        console.log('📥 Loading existing chat from database');
+        setChatLoading(true);
         loadCurrentChat(chatId);
       } else {
+        console.log('📝 New chat mode - ready for first message');
         setChatLoading(false);
       }
     }
   }, [user, chatId]);
+
+  // Update activeChatId when chatId changes
+  useEffect(() => {
+    setActiveChatId(chatId);
+  }, [chatId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -208,7 +244,7 @@ const StreamingChatPage = () => {
   // Location is now handled by useLocation hook
 
   const saveMessageToDatabase = async (content: string, role: 'user' | 'assistant') => {
-    if (!currentChat || chatId === 'new') return;
+    if (!currentChat || activeChatId === 'new') return;
 
     try {
       // Update local chat state
@@ -221,7 +257,7 @@ const StreamingChatPage = () => {
       
       // Update chats list
       setChats(prev => prev.map(chat => 
-        chat._id === chatId ? updatedChat : chat
+        chat._id === activeChatId ? updatedChat : chat
       ));
     } catch (error) {
       console.error('Error saving message:', error);
@@ -247,21 +283,30 @@ const StreamingChatPage = () => {
     setMessages(prev => [...prev, userMsg]);
 
     // Create new chat if needed (seamless experience like Claude)
-    let activeChatId = chatId;
-    if (chatId === 'new') {
+    let newChatId = activeChatId;
+    if (activeChatId === 'new') {
       try {
-        // Create chat in background without blocking UI
+        console.log('📝 Creating new chat...');
+        console.log('🔑 Auth header:', axios.defaults.headers.common['Authorization'] ? 'Present' : 'Missing');
         const response = await axios.post(`${API_BASE_URL}/api/chats`);
-        activeChatId = response.data._id;
+        console.log('✅ Chat created:', response.data);
+        newChatId = response.data._id;
         setCurrentChat(response.data);
+        setActiveChatId(newChatId); // Update active chat ID immediately
         
-        // Update URL immediately without page reload
-        window.history.replaceState({}, '', `/chat/${activeChatId}`);
+        // Update URL silently without triggering Next.js re-render
+        console.log('🔄 Updating URL silently to:', `/chat/${newChatId}`);
+        window.history.replaceState({}, '', `/chat/${newChatId}`);
         
         // Update chats list
-        setChats(prev => [response.data, ...prev]);
-      } catch (error) {
-        toast.error('Failed to create chat');
+        setChats(prev => {
+          console.log('📋 Adding chat to sidebar');
+          return [response.data, ...prev];
+        });
+      } catch (error: any) {
+        console.error('❌ Failed to create chat:', error);
+        console.error('Error details:', error.response?.data || error.message);
+        toast.error(`Failed to create chat: ${error.response?.data?.error || error.message}`);
         return;
       }
     }
@@ -282,12 +327,16 @@ const StreamingChatPage = () => {
         console.warn('⚠️ Failed to get fresh location, using cached:', error);
         locationToSend = currentLocation;
       }
+    } else {
+      console.log('📍 No location available - location sharing disabled or not set');
     }
+    
+    console.log('📤 Sending message with location data:', locationToSend);
 
-    const sent = sendWebSocketMessage(userMessage, activeChatId, conversationHistory, locationToSend);
+    const sent = sendWebSocketMessage(userMessage, newChatId, conversationHistory, locationToSend);
     
     // Save user message to database after sending (non-blocking)
-    if (activeChatId !== 'new') {
+    if (newChatId !== 'new') {
       saveMessageToDatabase(userMessage, 'user');
     }
     
@@ -321,6 +370,14 @@ const StreamingChatPage = () => {
   };
 
   const createNewChat = () => {
+    // Reset all state for new chat
+    setCurrentChat(null);
+    setMessages([]);
+    setActiveChatId('new');
+    setIsTyping(false);
+    setStreamingMessageId(null);
+    setChatLoading(false);
+    
     router.push('/chat/new');
     setSidebarOpen(false);
   };
@@ -623,6 +680,11 @@ const StreamingChatPage = () => {
             </div>
           </div>
         </div>
+
+        {/* Temporary Location Debug Tool - COMMENTED OUT */}
+        <div className="p-4 border-b border-gray-200 bg-yellow-50">
+          <LocationDebug />
+        </div> 
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white p-4">

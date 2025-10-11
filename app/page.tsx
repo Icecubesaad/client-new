@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
+import Cookies from 'js-cookie';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { MessageSquare, Zap, Globe, Shield, ArrowRight } from 'lucide-react';
@@ -10,16 +11,34 @@ export default function Home() {
   const { user, loading } = useAuth();
   const router = useRouter();
 
+  // Immediate redirect if token exists (don't wait for user fetch)
+  useEffect(() => {
+    const token = Cookies.get('token');
+    if (token) {
+      console.log('🔑 Token found, redirecting to chat...');
+      router.replace('/chat/new');
+      return;
+    }
+  }, [router]);
+
+  // Fallback redirect when user is loaded
   useEffect(() => {
     if (!loading && user) {
-      router.push('/chat');
+      console.log('👤 User loaded, redirecting to chat...');
+      router.replace('/chat/new');
     }
   }, [user, loading, router]);
 
-  if (loading) {
+  // Show loading while checking authentication or if user exists
+  if (loading || user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">
+            {user ? 'Redirecting to chat...' : 'Loading...'}
+          </p>
+        </div>
       </div>
     );
   }

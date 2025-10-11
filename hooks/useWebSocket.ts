@@ -19,12 +19,19 @@ interface WebSocketError {
   timestamp: string;
 }
 
+interface ChatUpdateData {
+  chatId: string;
+  title: string;
+  updatedAt: string;
+}
+
 interface UseWebSocketProps {
   onMessageChunk?: (data: WebSocketMessage) => void;
   onMessageComplete?: (data: WebSocketMessage) => void;
   onTypingStart?: (chatId: string) => void;
   onTypingStop?: (chatId: string) => void;
   onError?: (error: WebSocketError) => void;
+  onChatUpdate?: (data: ChatUpdateData) => void;
 }
 
 export const useWebSocket = ({
@@ -32,7 +39,8 @@ export const useWebSocket = ({
   onMessageComplete,
   onTypingStart,
   onTypingStop,
-  onError
+  onError,
+  onChatUpdate
 }: UseWebSocketProps = {}) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -153,8 +161,13 @@ export const useWebSocket = ({
       toast.success('Response generation cancelled');
     });
 
+    socket.on('chat_updated', (data: ChatUpdateData) => {
+      console.log('Chat updated:', data);
+      onChatUpdate?.(data);
+    });
+
     socketRef.current = socket;
-  }, [BACKEND_URL, onMessageChunk, onMessageComplete, onTypingStart, onTypingStop, onError]);
+  }, [BACKEND_URL, onMessageChunk, onMessageComplete, onTypingStart, onTypingStop, onError, onChatUpdate]);
 
   const attemptReconnect = useCallback(() => {
     if (reconnectAttemptsRef.current >= 5) {

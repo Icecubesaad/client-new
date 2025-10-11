@@ -140,12 +140,15 @@ export const StreamingMessage: React.FC<StreamingMessageProps> = ({
                         </a>
                       );
                     },
-                    // Custom rendering for lists
+                    // Custom rendering for lists - hide bullets for business listings
                     ul({ children }) {
-                      return <ul className="list-disc list-inside space-y-1">{children}</ul>;
+                      return <ul className="list-none space-y-1">{children}</ul>;
                     },
                     ol({ children }) {
-                      return <ol className="list-decimal list-inside space-y-1">{children}</ol>;
+                      return <ol className="list-none space-y-1">{children}</ol>;
+                    },
+                    li({ children }) {
+                      return <li className="mb-1">{children}</li>;
                     },
                     // Custom rendering for paragraphs
                     p({ children }) {

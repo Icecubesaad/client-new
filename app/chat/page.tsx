@@ -12,37 +12,24 @@ const ChatRedirectPage = () => {
   const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://server-test-steel.vercel.app';
 
     useEffect(() => {
-    const redirectToNewChat = () => {
-      if (!user || authLoading) return;
-      
-      // Simply redirect to the new chat page without creating database entry
+    if (!authLoading && user) {
+      console.log('📱 Redirecting to new chat...');
       router.replace('/chat/new');
-    };
-
-    redirectToNewChat();
+    } else if (!authLoading && !user) {
+      console.log('🔒 No user, redirecting to login...');
+      router.replace('/login');
+    }
   }, [user, authLoading, router]);
 
   // Show loading while redirecting
-  if (authLoading || !user) {
-    return (
-      <div className="flex h-screen bg-gray-50 items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  // Redirect to login if not authenticated
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
-
   return (
     <div className="flex h-screen bg-gray-50 items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">Creating new chat...</p>
-        </div>
+        <p className="text-gray-600">
+          {authLoading ? 'Loading...' : user ? 'Redirecting to chat...' : 'Redirecting to login...'}
+        </p>
+      </div>
     </div>
   );
 };

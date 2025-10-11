@@ -16,6 +16,7 @@ interface UseLocationReturn {
   requestLocation: () => Promise<void>;
   clearLocation: () => void;
   getCurrentLocation: () => Promise<LocationData | null>;
+  forceRefreshLocation: () => Promise<void>;
 }
 
 // Helper function to calculate distance between two coordinates in kilometers
@@ -30,38 +31,48 @@ const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: numbe
   return R * c;
 };
 
-// Helper function to update location in database
+// Helper function to update location in database with debouncing
+let updateLocationTimeout: NodeJS.Timeout | null = null;
 const updateLocationInDatabase = async (locationData: LocationData) => {
-  try {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
-    const response = await fetch(`${API_BASE_URL}/api/user/location`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${document.cookie.split('token=')[1]?.split(';')[0]}`
-      },
-      body: JSON.stringify({
-        lat: locationData.lat,
-        lng: locationData.lng,
-        accuracy: locationData.accuracy
-      })
-    });
-
-    if (response.ok) {
-      console.log('📍 Location updated in database');
-    } else {
-      console.warn('⚠️ Failed to update location in database');
-    }
-  } catch (error) {
-    console.warn('⚠️ Database location update failed:', error);
+  // Debounce rapid location updates
+  if (updateLocationTimeout) {
+    clearTimeout(updateLocationTimeout);
   }
+  
+  updateLocationTimeout = setTimeout(async () => {
+    try {
+      console.log('📍 Updating location in database (debounced)');
+      const API_BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+      const response = await fetch(`${API_BASE_URL}/api/user/location`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${document.cookie.split('token=')[1]?.split(';')[0]}`
+        },
+        body: JSON.stringify({
+          lat: locationData.lat,
+          lng: locationData.lng,
+          accuracy: locationData.accuracy
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ Location updated in database');
+      } else {
+        console.warn('⚠️ Failed to update location in database');
+      }
+    } catch (error) {
+      console.warn('⚠️ Database location update failed:', error);
+    }
+  }, 2000); // Wait 2 seconds before updating
 };
 
 export const useLocation = (): UseLocationReturn => {
   const [location, setLocation] = useState<LocationData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSupported] = useState(() => 'geolocation' in navigator);
+  // Check if geolocation is supported (only in browser)
+  const [isSupported] = useState(() => typeof window !== 'undefined' && 'geolocation' in navigator);
   const [watchId, setWatchId] = useState<number | null>(null);
 
   // Load saved location from localStorage and database on mount
@@ -117,13 +128,30 @@ export const useLocation = (): UseLocationReturn => {
   }, []);
 
   const requestLocation = useCallback(async () => {
+    console.log('📍 Location request started...');
+    console.log('🔧 Browser support:', isSupported);
+    console.log('🌐 User agent:', navigator.userAgent);
+    console.log('🔒 Is HTTPS?', window.location.protocol === 'https:');
+    
     if (!isSupported) {
       const errorMsg = 'Geolocation is not supported by this browser';
+      console.error('❌ Geolocation not supported');
       setError(errorMsg);
       toast.error(errorMsg);
       return;
     }
 
+    // Check permission state if available
+    if ('permissions' in navigator) {
+      try {
+        const permission = await navigator.permissions.query({ name: 'geolocation' });
+        console.log('🔐 Current permission state:', permission.state);
+      } catch (e) {
+        console.log('🔐 Permission API not available');
+      }
+    }
+
+    console.log('⏳ Requesting location permission...');
     setIsLoading(true);
     setError(null);
 
@@ -147,10 +175,12 @@ export const useLocation = (): UseLocationReturn => {
         timestamp: Date.now()
       };
 
+      console.log('✅ Location obtained:', locationData);
       setLocation(locationData);
       
       // Save to localStorage
       localStorage.setItem('userLocation', JSON.stringify(locationData));
+      console.log('💾 Location saved to localStorage');
       
       // Save to database
       try {
@@ -180,7 +210,7 @@ export const useLocation = (): UseLocationReturn => {
       console.log('📍 Location obtained:', locationData);
       toast.success('Location enabled for better recommendations!');
 
-      // Start watching location for real-time updates
+      // Start watching location for real-time updates (less aggressive)
       if (isSupported && !watchId) {
         const id = navigator.geolocation.watchPosition(
           (position) => {
@@ -191,61 +221,75 @@ export const useLocation = (): UseLocationReturn => {
               timestamp: Date.now()
             };
 
-            // Check if location has changed significantly (more than 100 meters)
+            // Check if location has changed significantly (more than 500 meters)
             if (location) {
               const distance = calculateDistance(
                 location.lat, location.lng,
                 newLocationData.lat, newLocationData.lng
               );
               
-              if (distance > 0.1) { // 100 meters
-                console.log(`📍 Location changed by ${(distance * 1000).toFixed(0)}m, updating...`);
+              if (distance > 0.5) { // 500 meters - less sensitive
+                console.log(`📍 Significant location change: ${(distance * 1000).toFixed(0)}m, updating...`);
                 setLocation(newLocationData);
                 localStorage.setItem('userLocation', JSON.stringify(newLocationData));
                 
-                // Update database
+                // Update database (debounced)
                 updateLocationInDatabase(newLocationData);
+              } else {
+                console.log(`📍 Minor location change: ${(distance * 1000).toFixed(0)}m, ignoring`);
               }
+            } else {
+              // First location update
+              setLocation(newLocationData);
+              localStorage.setItem('userLocation', JSON.stringify(newLocationData));
+              updateLocationInDatabase(newLocationData);
             }
           },
           (error) => {
             console.warn('Location watch error:', error);
           },
           {
-            enableHighAccuracy: true,
-            timeout: 30000,
-            maximumAge: 60000 // 1 minute
+            enableHighAccuracy: false, // Less battery intensive
+            timeout: 60000, // 1 minute timeout
+            maximumAge: 300000 // 5 minutes cache
           }
         );
         setWatchId(id);
+        console.log('📍 Started location watching with 500m threshold');
       }
 
     } catch (err: any) {
+      console.error('❌ Location request failed:', err);
       let errorMessage = 'Failed to get location';
       
       switch (err.code) {
         case err.PERMISSION_DENIED:
           errorMessage = 'Location access denied. Please enable location permissions.';
+          console.error('🚫 User denied location permission');
           break;
         case err.POSITION_UNAVAILABLE:
           errorMessage = 'Location information unavailable.';
+          console.error('📍 Location unavailable');
           break;
         case err.TIMEOUT:
           errorMessage = 'Location request timed out.';
+          console.error('⏰ Location request timeout');
           break;
         default:
           errorMessage = 'An unknown error occurred while getting location.';
+          console.error('❓ Unknown location error:', err);
       }
 
       setError(errorMessage);
       toast.error(errorMessage);
-      console.error('Location error:', err);
+      console.error('Location error details:', err);
     } finally {
       setIsLoading(false);
     }
   }, [isSupported]);
 
   const clearLocation = useCallback(async () => {
+    console.log('🧹 Clearing all location data...');
     setLocation(null);
     setError(null);
     localStorage.removeItem('userLocation');
@@ -281,10 +325,9 @@ export const useLocation = (): UseLocationReturn => {
 
   // Function to get current real-time location (not cached)
   const getCurrentLocation = useCallback(async (): Promise<LocationData | null> => {
-    if (!isSupported) {
-      return null;
-    }
-
+    if (!isSupported) return null;
+    
+    console.log('🔄 Getting fresh current location (forced, no cache)...');
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(
@@ -292,26 +335,41 @@ export const useLocation = (): UseLocationReturn => {
           reject,
           {
             enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0 // Force fresh location, no cache
+            timeout: 30000,    // Longer timeout for GPS lock
+            maximumAge: 0      // CRITICAL: Force fresh location, no cache
           }
         );
       });
-
-      const currentLocationData: LocationData = {
+      
+      const freshLocation = {
         lat: position.coords.latitude,
         lng: position.coords.longitude,
         accuracy: position.coords.accuracy,
         timestamp: Date.now()
       };
-
-      console.log('📍 Got fresh current location:', currentLocationData);
-      return currentLocationData;
+      
+      console.log('📍 Fresh location obtained (no cache):', freshLocation);
+      console.log(`📍 Coordinates: ${freshLocation.lat}, ${freshLocation.lng}`);
+      console.log(`📍 Accuracy: ${freshLocation.accuracy}m`);
+      
+      // Update current location state with fresh data
+      setLocation(freshLocation);
+      localStorage.setItem('userLocation', JSON.stringify(freshLocation));
+      
+      return freshLocation;
     } catch (error) {
-      console.warn('⚠️ Failed to get current location:', error);
+      console.warn('⚠️ Failed to get fresh location:', error);
+      console.log('📍 Fallback to cached location:', location);
       return location; // Fallback to cached location
     }
   }, [isSupported, location]);
+
+  // Force refresh location (clear cache and get fresh)
+  const forceRefreshLocation = useCallback(async () => {
+    console.log('🔄 Force refreshing location...');
+    localStorage.removeItem('userLocation'); // Clear cache
+    await requestLocation(); // Get fresh location
+  }, [requestLocation]);
 
   return {
     location,
@@ -320,6 +378,7 @@ export const useLocation = (): UseLocationReturn => {
     isSupported,
     requestLocation,
     clearLocation,
-    getCurrentLocation
+    getCurrentLocation,
+    forceRefreshLocation
   };
 };
