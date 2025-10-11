@@ -14,11 +14,35 @@ export default function LocationDebug() {
   const [result, setResult] = useState<LocationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<any>(null);
 
   const testLocation = async () => {
     setLoading(true);
     setError(null);
     setResult(null);
+
+    // Collect diagnostics
+    const diag = {
+      isSecureContext: window.isSecureContext,
+      protocol: window.location.protocol,
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      permissions: null as any,
+      connection: (navigator as any).connection?.effectiveType || 'unknown'
+    };
+
+    // Check permissions
+    try {
+      if ('permissions' in navigator) {
+        const permission = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+        diag.permissions = permission.state;
+      }
+    } catch (e) {
+      diag.permissions = 'unavailable';
+    }
+
+    setDiagnostics(diag);
+    console.log('🔧 System diagnostics:', diag);
 
     try {
       // Check if geolocation is supported
@@ -119,10 +143,27 @@ export default function LocationDebug() {
         </div>
       )}
 
+      {diagnostics && (
+        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-blue-700 font-medium">🔧 System Diagnostics:</p>
+          <div className="text-xs text-blue-600 space-y-1">
+            <p><strong>Protocol:</strong> {diagnostics.protocol}</p>
+            <p><strong>Secure Context:</strong> {diagnostics.isSecureContext ? '✅ Yes' : '❌ No'}</p>
+            <p><strong>Platform:</strong> {diagnostics.platform}</p>
+            <p><strong>Permissions:</strong> {diagnostics.permissions}</p>
+            <p><strong>Connection:</strong> {diagnostics.connection}</p>
+            <p><strong>Device Type:</strong> {
+              /Mobile|Android|iPhone|iPad/.test(diagnostics.userAgent) ? '📱 Mobile' : '💻 Desktop'
+            }</p>
+          </div>
+        </div>
+      )}
+
       <div className="mt-3 text-xs text-gray-600">
         <p><strong>Expected for GPS:</strong> Accuracy &lt; 20m</p>
         <p><strong>Expected for WiFi:</strong> Accuracy 20-100m</p>
         <p><strong>IP Location:</strong> Accuracy &gt; 1000m (city-level)</p>
+        <p><strong>Note:</strong> Desktop computers usually don't have GPS chips</p>
       </div>
     </div>
   );
