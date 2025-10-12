@@ -270,16 +270,19 @@ const StreamingChatPage = () => {
     if (!inputMessage.trim() || isTyping) return;
 
     const userMessage = inputMessage.trim();
+    
+    // Clear input and show typing indicator immediately for instant feedback
     setInputMessage('');
+    setIsTyping(true);
 
     // Add user message to UI
     const userMsg: Message = {
       id: `msg_${Date.now()}_user`,
       role: 'user',
       content: userMessage,
-      timestamp: new Date(),
-      isStreaming: false
+      timestamp: new Date()
     };
+    
     setMessages(prev => [...prev, userMsg]);
 
     // Create new chat if needed (seamless experience like Claude)
@@ -317,7 +320,7 @@ const StreamingChatPage = () => {
       content: m.content
     }));
 
-    // Get fresh current location if location is enabled
+    // Get fresh current location if location is enabled (async, non-blocking)
     let locationToSend = null;
     if (currentLocation) {
       try {
@@ -344,6 +347,7 @@ const StreamingChatPage = () => {
       toast.error('Failed to send message. Please check your connection.');
       // Remove the user message if sending failed
       setMessages(prev => prev.filter(m => m.id !== userMsg.id));
+      setIsTyping(false); // Hide typing indicator on failure
     }
   };
 
@@ -458,10 +462,10 @@ const StreamingChatPage = () => {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -320, opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="w-80 bg-white border-r border-gray-200 flex flex-col fixed md:relative z-20 h-full shadow-lg"
+            className="w-full sm:w-80 bg-white border-r border-gray-200 flex flex-col fixed md:relative z-20 h-full shadow-lg md:shadow-none"
           >
             {/* Sidebar Header */}
-            <div className="p-4 border-b border-gray-100">
+            <div className="p-3 sm:p-4 border-b border-gray-100">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-2">
                   <Sparkles className="w-6 h-6 text-blue-600" />
@@ -652,7 +656,7 @@ const StreamingChatPage = () => {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-white">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm">
+        <div className="bg-white border-b border-gray-200 p-3 sm:p-4 flex items-center justify-between shadow-sm">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -660,12 +664,12 @@ const StreamingChatPage = () => {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div>
-              <h1 className="text-lg font-bold text-gray-800 flex items-center space-x-2">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base sm:text-lg font-bold text-gray-800 flex items-center space-x-2 truncate">
                 <Bot className="w-5 h-5 text-purple-600" />
                 <span>{currentChat?.title || 'New Chat'}</span>
               </h1>
-              <div className="flex items-center space-x-4 text-sm text-gray-500">
+              <div className="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-sm text-gray-500">
                 <span className="flex items-center space-x-1">
                   <Zap className={`w-3 h-3 ${isConnected ? 'text-green-500' : 'text-gray-400'}`} />
                   <span>{isConnected ? 'Connected' : 'Offline'}</span>
@@ -687,7 +691,7 @@ const StreamingChatPage = () => {
         </div>  */}
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white p-4">
+        <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white p-3 sm:p-4">
           {messages.length === 0 ? (
             <div className="h-full flex items-center justify-center">
               <div className="text-center max-w-lg">
@@ -753,9 +757,9 @@ const StreamingChatPage = () => {
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-gray-200 p-4 bg-white">
+        <div className="border-t border-gray-200 p-3 sm:p-4 bg-white safe-area-bottom">
           <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto">
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1.5 sm:space-x-2">
               {/* Location Toggle Button */}
               {locationSupported && (
                 <motion.button
@@ -764,14 +768,14 @@ const StreamingChatPage = () => {
                   type="button"
                   onClick={currentLocation ? clearLocation : requestLocation}
                   disabled={locationLoading}
-                  className={`p-3 rounded-xl transition-all shadow-lg ${
+                  className={`p-2.5 sm:p-3 rounded-xl transition-all shadow-lg ${
                     currentLocation 
                       ? 'bg-green-500 text-white hover:bg-green-600' 
                       : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                   } ${locationLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   title={currentLocation ? 'Location enabled - Click to disable' : 'Click to enable location for better recommendations'}
                 >
-                  <MapPin className={`w-5 h-5 ${locationLoading ? 'animate-pulse' : ''}`} />
+                  <MapPin className={`w-4 h-4 sm:w-5 sm:h-5 ${locationLoading ? 'animate-pulse' : ''}`} />
                 </motion.button>
               )}
               
@@ -788,16 +792,16 @@ const StreamingChatPage = () => {
                     : "Type your message..."
                 }
                 disabled={!isConnected || isTyping}
-                className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-4 py-3 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 bg-gray-50 border border-gray-300 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 type="submit"
                 disabled={!isConnected || !inputMessage.trim() || isTyping}
-                className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-2.5 sm:p-3 rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Send className="w-5 h-5" />
+                <Send className="w-4 h-4 sm:w-5 sm:h-5" />
               </motion.button>
             </div>
             {!isConnected && (

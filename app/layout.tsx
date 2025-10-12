@@ -4,6 +4,18 @@ import { AuthProvider } from '../context/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
 
+export const metadata = {
+  title: 'Smart Retrieval AI Chatbot',
+  description: 'AI-powered chatbot with location-based recommendations',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+  },
+  themeColor: '#3B82F6',
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -11,11 +23,17 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        <meta name="theme-color" content="#3B82F6" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+      </head>
+      <body className="overflow-hidden"  >
         <AuthProvider>
           {children}
           <Toaster
-            position="top-right"
+            position="top-center"
             toastOptions={{
               duration: 4000,
               style: {
