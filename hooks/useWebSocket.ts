@@ -85,7 +85,7 @@ export const useWebSocket = ({
     }
 
     // Create new socket connection
-    const socket = io(BACKEND_URL, {
+    const socket = io(API_BASE_URL, {
       auth: {
         token
       },
@@ -196,7 +196,7 @@ export const useWebSocket = ({
     });
 
     socketRef.current = socket;
-  }, [BACKEND_URL, onMessageChunk, onMessageComplete, onTypingStart, onTypingStop, onError, onChatUpdate]);
+  }, [onMessageChunk, onMessageComplete, onTypingStart, onTypingStop, onError, onChatUpdate]);
 
   const attemptReconnect = useCallback(() => {
     if (reconnectAttemptsRef.current >= 5) {
