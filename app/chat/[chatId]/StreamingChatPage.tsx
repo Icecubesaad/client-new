@@ -682,9 +682,9 @@ const StreamingChatPage = () => {
         </div>
 
         {/* Temporary Location Debug Tool - COMMENTED OUT */}
-        <div className="p-4 border-b border-gray-200 bg-yellow-50">
+        {/* <div className="p-4 border-b border-gray-200 bg-yellow-50">
           <LocationDebug />
-        </div> 
+        </div>  */}
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white p-4">
