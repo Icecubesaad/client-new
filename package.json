@@ -6,6 +6,8 @@
     "dev": "next dev",
     "dev-https": "next dev --experimental-https",
     "build": "next build",
+    "build:cpanel": "next build && next export",
+    "deploy:prepare": "node deploy.js",
     "start": "next start",
     "lint": "next lint"
   },
